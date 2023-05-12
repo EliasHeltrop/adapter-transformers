@@ -474,7 +474,8 @@ class ModelAdaptersMixin(PushAdapterToHubMixin, ABC):
                 - if not given, the default configuration for this adapter type will be used
             overwrite_ok (bool, optional):
                 Overwrite an adapter with the same name if it exists. By default (False), an
-            exception is thrown. set_active (bool, optional):
+            exception is thrown.
+            set_active (bool, optional):
                 Set the adapter to be the active one. By default (False),
             the adapter is added but not activated.
         """

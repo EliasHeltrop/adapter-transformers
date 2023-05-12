@@ -182,6 +182,7 @@ if TYPE_CHECKING:
         PrefixTuningConfig,
         StaticAdapterFusionConfig,
         UniPELTConfig,
+        AdaMixConfig
     )
     from .context import AdapterSetup, ForwardContext
     from .heads import (
