@@ -3,8 +3,9 @@
 #  Copyright (c) Microsoft Corporation. All rights reserved.
 #  Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 #  ------------------------------------------------------------------------------------------
+import copy
 import math
-from typing import List, Union
+from typing import List, Union, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -12,17 +13,17 @@ import torch.nn.functional as F
 
 from ..configuration_utils import PretrainedConfig
 from .composition import AdapterCompositionBlock
-from .configuration import LoRAConfig
+from .configuration import LoRAConfig, AdaMixConfig
 from .layer import AdapterLayerBase
 
 
 class LoRA(nn.Module):
     def __init__(
-        self,
-        lora_A_shape,
-        lora_B_shape,
-        config: LoRAConfig,
-        gating_heads: int = 1,
+            self,
+            lora_A_shape,
+            lora_B_shape,
+            config: LoRAConfig,
+            gating_heads: int = 1,
     ):
         super().__init__()
         self.r = config.r
@@ -91,6 +92,64 @@ class LoRA(nn.Module):
             raise ValueError("Invalid composition mode.")
 
 
+class AdaMix(nn.Module):
+    def __init__(self, lora_A_shape, lora_B_shape, config: AdaMixConfig, gating_heads: int = 1, *args, **kwargs):
+        # TODO: Build one "mixable" Lora Layer. Should make strong use of existing Lora implementation
+        super().__init__(*args, **kwargs)
+        self.train = True
+        self.config = config
+        lora_config = self.convert_to_lora_config()
+
+        lora = LoRA(
+            lora_A_shape, lora_B_shape,
+            lora_config,
+            gating_heads=1
+        )
+
+        if config.dropout > 0.0:
+            self.lora_dropout = nn.Dropout(p=config.dropout)
+        else:
+            self.lora_dropout = lambda x: x
+
+        if config.share_A:
+            self.experts_lora_A = torch.nn.ParameterList([copy.deepcopy(lora.lora_A) for _ in range(1)])
+        else:
+            self.experts_lora_A = torch.nn.ParameterList(
+                [copy.deepcopy(lora.lora_A) for _ in range(config.adaption_modules)])
+        if config.share_B:
+            self.experts_lora_B = torch.nn.ParameterList([copy.deepcopy(lora.lora_B) for _ in range(1)])
+        else:
+            self.experts_lora_B = torch.nn.ParameterList(
+                [copy.deepcopy(lora.lora_B) for _ in range(config.adaption_modules)])
+
+        self.expert_score_weights = torch.nn.Parameter(torch.zeros(config.adaption_modules),
+                                                       requires_grad=False)  # Todo: figure out what this does
+
+    def convert_to_lora_config(self) -> LoRAConfig:
+        config_dict = self.config.to_dict()
+        fields_to_remove = ['adaption_modules', 'share_A', 'share_B']
+        [config_dict.pop(key) for key in fields_to_remove]
+        config_dict['architecture'] = 'lora'
+        return LoRAConfig(**config_dict)
+
+    def compute_A_B(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        def sample_expert_id():
+            return torch.randint(low=0, high=self.config.adaption_modules,
+                                 size=(1,)).item()
+
+        if self.config.share_A:
+            after_A = F.linear(self.lora_dropout(x), self.experts_lora_A[0])
+        else:
+            expert_id = sample_expert_id()
+            after_A = F.linear(self.lora_dropout(x), self.experts_lora_A[expert_id])
+        if self.config.share_B:
+            after_B = F.linear(self.lora_dropout(x), self.experts_lora_B[0])
+        else:
+            expert_id = sample_expert_id()
+            after_B = F.linear(self.lora_dropout(x), self.experts_lora_B[expert_id])
+        return after_A, after_B
+
+
 class LoRALayer(AdapterLayerBase):
     def __init__(self, location_key: str, config: PretrainedConfig, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -106,17 +165,23 @@ class LoRALayer(AdapterLayerBase):
     def _check_lora_location(self, config: LoRAConfig):
         return True
 
-    def _get_lora_shapes(self, config: LoRAConfig):
+    def _get_lora_shapes(self, config: Union[LoRAConfig, AdaMixConfig]):
         raise NotImplementedError()
 
     def add_adapter(self, adapter_name: str, layer_idx: int) -> bool:
         self.layer_idx = layer_idx
         lora_config = self.config.adapters.match(
             adapter_name,
-            config_type=LoRAConfig,
+            config_type=Union[AdaMixConfig, LoRAConfig],
             layer_idx=self.layer_idx,
             location_key=self.location_key,
         )
+        if lora_config is not None and isinstance(lora_config, AdaMixConfig):
+            print("Adamix")
+            adamix = AdaMix(*self._get_lora_shapes(lora_config), lora_config, 1)
+            adamix.train = True
+            self.loras[adapter_name] = adamix
+            return True
         if lora_config is not None and self._check_lora_location(lora_config):
             lora = LoRA(
                 *self._get_lora_shapes(lora_config),
@@ -165,20 +230,19 @@ class Linear(LoRALayer, nn.Linear):
     """
 
     def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        location_key: str,
-        config: PretrainedConfig,
-        attn_key: str = None,
-        fan_in_fan_out: bool = False,
-        no_init_bias: bool = False,
-        **kwargs
+            self,
+            in_features: int,
+            out_features: int,
+            location_key: str,
+            config: PretrainedConfig,
+            attn_key: str = None,
+            fan_in_fan_out: bool = False,
+            no_init_bias: bool = False,
+            **kwargs
     ):
         if no_init_bias and "bias" not in kwargs:
             kwargs["bias"] = False
         LoRALayer.__init__(self, location_key, config, in_features, out_features, **kwargs)
-
         self.attn_key = attn_key
         self.fan_in_fan_out = fan_in_fan_out
         if fan_in_fan_out:
@@ -244,6 +308,8 @@ class Linear(LoRALayer, nn.Linear):
             if adapter_setup is not None:
                 if len(adapter_setup) == 1:
                     lora = self.loras[adapter_setup[0]]
+                    if isinstance(lora, AdaMix):
+                        A, B = lora.compute_A_B(x)
                     # result shape: <batch_size> x <seq_len> x <head_dim>
                     result = F.linear(x, T(self.weight), bias=self.bias)
                     if lora.r > 0:
@@ -277,14 +343,14 @@ class MergedLinear(LoRALayer, nn.Linear):
     """
 
     def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        location_key: str,
-        config: PretrainedConfig,
-        fan_in_fan_out: bool = False,
-        no_init_bias: bool = False,
-        **kwargs
+            self,
+            in_features: int,
+            out_features: int,
+            location_key: str,
+            config: PretrainedConfig,
+            fan_in_fan_out: bool = False,
+            no_init_bias: bool = False,
+            **kwargs
     ):
         if no_init_bias and "bias" not in kwargs:
             kwargs["bias"] = False

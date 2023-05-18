@@ -58,6 +58,7 @@ _import_structure = {
         "PrefixTuningConfig",
         "StaticAdapterFusionConfig",
         "UniPELTConfig",
+        "AdaMixConfig",
     ],
     "context": [
         "AdapterSetup",
