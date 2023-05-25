@@ -15,7 +15,7 @@ import copy
 from typing import Union, Optional
 
 
-class AdaMix(LoRA):
+class Nope(LoRA):
 
     def __int__(self,
                 in_features: int,
@@ -77,7 +77,7 @@ class AdaMixLayer(AdapterLayerBase):
             location_key=self.location_key,
         )
         if adamix_config is not None and self._check_lora_location(adamix_config):
-            adamix = AdaMix(*self._get_lora_shapes(adamix_config), adamix_config)
+            adamix = Nope(*self._get_lora_shapes(adamix_config), adamix_config)
             adamix.train(self.training)
             self.lora_adaptions[adapter_name] = adamix
             return True

@@ -96,7 +96,6 @@ class AdaMix(nn.Module):
     def __init__(self, lora_A_shape, lora_B_shape, config: AdaMixConfig, gating_heads: int = 1, *args, **kwargs):
         # TODO: Build one "mixable" Lora Layer. Should make strong use of existing Lora implementation
         super().__init__(*args, **kwargs)
-        self.train = True
         self.config = config
         lora_config = self.convert_to_lora_config()
 
@@ -179,7 +178,7 @@ class LoRALayer(AdapterLayerBase):
         )
         if lora_config is not None and isinstance(lora_config, AdaMixConfig):
             adamix = AdaMix(*self._get_lora_shapes(lora_config), lora_config, 1)
-            adamix.train = True
+            adamix.train(self.training)
             self.loras[adapter_name] = adamix
             return True
         if lora_config is not None and self._check_lora_location(lora_config):
