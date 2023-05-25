@@ -100,11 +100,12 @@ class AdaMix(nn.Module):
         self.config = config
         lora_config = self.convert_to_lora_config()
 
-        lora = LoRA(
+        self.lora = LoRA(
             lora_A_shape, lora_B_shape,
             lora_config,
             gating_heads=1
         )
+        self.scaling = config.alpha / config.r
 
         if config.dropout > 0.0:
             self.lora_dropout = nn.Dropout(p=config.dropout)
@@ -112,15 +113,15 @@ class AdaMix(nn.Module):
             self.lora_dropout = lambda x: x
 
         if config.share_A:
-            self.experts_lora_A = torch.nn.ParameterList([copy.deepcopy(lora.lora_A) for _ in range(1)])
+            self.experts_lora_A = torch.nn.ParameterList([copy.deepcopy(self.lora.lora_A) for _ in range(1)])
         else:
             self.experts_lora_A = torch.nn.ParameterList(
-                [copy.deepcopy(lora.lora_A) for _ in range(config.adaption_modules)])
+                [copy.deepcopy(self.lora.lora_A) for _ in range(config.adaption_modules)])
         if config.share_B:
-            self.experts_lora_B = torch.nn.ParameterList([copy.deepcopy(lora.lora_B) for _ in range(1)])
+            self.experts_lora_B = torch.nn.ParameterList([copy.deepcopy(self.lora.lora_B) for _ in range(1)])
         else:
             self.experts_lora_B = torch.nn.ParameterList(
-                [copy.deepcopy(lora.lora_B) for _ in range(config.adaption_modules)])
+                [copy.deepcopy(self.lora.lora_B) for _ in range(config.adaption_modules)])
 
         self.expert_score_weights = torch.nn.Parameter(torch.zeros(config.adaption_modules),
                                                        requires_grad=False)  # Todo: figure out what this does
@@ -132,22 +133,22 @@ class AdaMix(nn.Module):
         config_dict['architecture'] = 'lora'
         return LoRAConfig(**config_dict)
 
-    def compute_A_B(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_A_B(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         def sample_expert_id():
             return torch.randint(low=0, high=self.config.adaption_modules,
                                  size=(1,)).item()
 
         if self.config.share_A:
-            after_A = F.linear(self.lora_dropout(x), self.experts_lora_A[0])
+            A = self.experts_lora_A[0]
         else:
             expert_id = sample_expert_id()
-            after_A = F.linear(self.lora_dropout(x), self.experts_lora_A[expert_id])
+            A = self.experts_lora_A[expert_id]
         if self.config.share_B:
-            after_B = F.linear(self.lora_dropout(x), self.experts_lora_B[0])
+            B = self.experts_lora_B[0]
         else:
             expert_id = sample_expert_id()
-            after_B = F.linear(self.lora_dropout(x), self.experts_lora_B[expert_id])
-        return after_A, after_B
+            B = self.experts_lora_B[expert_id]
+        return A, B
 
 
 class LoRALayer(AdapterLayerBase):
@@ -177,7 +178,6 @@ class LoRALayer(AdapterLayerBase):
             location_key=self.location_key,
         )
         if lora_config is not None and isinstance(lora_config, AdaMixConfig):
-            print("Adamix")
             adamix = AdaMix(*self._get_lora_shapes(lora_config), lora_config, 1)
             adamix.train = True
             self.loras[adapter_name] = adamix
@@ -308,10 +308,12 @@ class Linear(LoRALayer, nn.Linear):
             if adapter_setup is not None:
                 if len(adapter_setup) == 1:
                     lora = self.loras[adapter_setup[0]]
-                    if isinstance(lora, AdaMix):
-                        A, B = lora.compute_A_B(x)
                     # result shape: <batch_size> x <seq_len> x <head_dim>
                     result = F.linear(x, T(self.weight), bias=self.bias)
+                    if isinstance(lora, AdaMix):
+                        A, B = lora.get_A_B(x)
+                        delta_w = lora.lora.lora_dropout(x) @ torch.t(A) @ torch.t(B)
+                        return result + delta_w * lora.scaling
                     if lora.r > 0:
                         if lora.composition_mode == "scale":
                             delta_w = lora.lora_B.view(1, 1, -1)

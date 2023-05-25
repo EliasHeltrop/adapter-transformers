@@ -31,6 +31,7 @@ from ...activations import ACT2FN
 from ...adapters.composition import adjust_tensors_for_parallel
 from ...adapters.context import ForwardContext
 from ...adapters.lora import Linear as LoRALinear
+#from ...adapters.adamix import AdaMixLinear as LoRALinear
 from ...adapters.mixins.bert import (
     BertModelAdaptersMixin,
     BertModelWithHeadsAdaptersMixin,
