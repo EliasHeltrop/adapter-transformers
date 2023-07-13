@@ -21,10 +21,18 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.utils.checkpoint
+from packaging import version
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
+from ...adapters.composition import adjust_tensors_for_parallel
+from ...adapters.context import ForwardContext
+from ...adapters.mixins.vilt import ViltModelAdaptersMixin, ViltOutputAdaptersMixin, ViltSelfOutputAdaptersMixin
+from ...adapters.model_mixin import ModelWithHeadsAdaptersMixin
+#from ...adapters.prefix_tuning import PrefixTuningShim
+
 from ...activations import ACT2FN
+from ...file_utils import add_start_docstrings, add_start_docstrings_to_model_forward, replace_return_docstrings
 from ...modeling_outputs import (
     BaseModelOutput,
     BaseModelOutputWithPooling,
@@ -85,6 +93,13 @@ class ViltForImagesAndTextClassificationOutput(ModelOutput):
     logits: torch.FloatTensor = None
     hidden_states: Optional[List[Tuple[torch.FloatTensor]]] = None
     attentions: Optional[List[Tuple[torch.FloatTensor]]] = None
+
+
+# Copied from transformers.models.vit.modeling_vit.to_2tuple
+def to_2tuple(x):
+    if isinstance(x, collections.abc.Iterable):
+        return x
+    return (x, x)
 
 
 class ViltEmbeddings(nn.Module):
@@ -729,7 +744,7 @@ VILT_IMAGES_AND_TEXT_CLASSIFICATION_INPUTS_DOCSTRING = r"""
     "The bare ViLT Model transformer outputting raw hidden-states without any specific head on top.",
     VILT_START_DOCSTRING,
 )
-class ViltModel(ViltPreTrainedModel):
+class ViltModel(ViltModelAdaptersMixin, ViltPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True):
         super().__init__(config)
         self.config = config
@@ -739,6 +754,8 @@ class ViltModel(ViltPreTrainedModel):
 
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = ViltPooler(config) if add_pooling_layer else None
+
+        self._init_adapter_modules()
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -894,9 +911,7 @@ class ViltPooler(nn.Module):
     """,
     VILT_START_DOCSTRING,
 )
-class ViltForMaskedLM(ViltPreTrainedModel):
-    _keys_to_ignore_on_load_missing = ["mlm_score.decoder.bias"]
-
+class ViltForMaskedLM(ModelWithHeadsAdaptersMixin, ViltPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
@@ -1068,7 +1083,7 @@ class ViltMLMHead(nn.Module):
     """,
     VILT_START_DOCSTRING,
 )
-class ViltForQuestionAnswering(ViltPreTrainedModel):
+class ViltForQuestionAnswering(ModelWithHeadsAdaptersMixin, ViltPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
@@ -1179,7 +1194,7 @@ class ViltForQuestionAnswering(ViltPreTrainedModel):
     """,
     VILT_START_DOCSTRING,
 )
-class ViltForImageAndTextRetrieval(ViltPreTrainedModel):
+class ViltForImageAndTextRetrieval(ModelWithHeadsAdaptersMixin, ViltPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
@@ -1278,7 +1293,7 @@ class ViltForImageAndTextRetrieval(ViltPreTrainedModel):
     """,
     VILT_IMAGES_AND_TEXT_CLASSIFICATION_INPUTS_DOCSTRING,
 )
-class ViltForImagesAndTextClassification(ViltPreTrainedModel):
+class ViltForImagesAndTextClassification(ModelWithHeadsAdaptersMixin, ViltPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 

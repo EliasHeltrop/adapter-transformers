@@ -54,6 +54,7 @@ CONFIG_CLASS_KEYS_MAPPING = {
         "attention_probs_dropout_prob": "dropout_rate",
     },
     "vit": {},
+    "vilt": {},
     "xlm_roberta": {},
 }
 SUBMODEL_NAMES = {"clip": ["vision_config", "text_config"], "encoder-decoder": ["encoder", "decoder"]}
