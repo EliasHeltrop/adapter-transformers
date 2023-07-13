@@ -1,9 +1,9 @@
 import warnings
 
-from ...file_utils import add_start_docstrings, add_start_docstrings_to_model_forward
-from ...models.vilt.modeling_vilt import VILT_INPUTS_DOCSTRING, VILT_START_DOCSTRING, ViltModel, ViltPreTrainedModel
-from ..context import AdapterSetup
-from ..heads import (
+from ....file_utils import add_start_docstrings, add_start_docstrings_to_model_forward
+from ....models.vilt.modeling_vilt import VILT_INPUTS_DOCSTRING, VILT_START_DOCSTRING, ViltModel, ViltPreTrainedModel
+from ...context import AdapterSetup
+from ...heads import (
     ClassificationHead,
     ModelWithFlexibleHeadsAdaptersMixin,
     MultiLabelClassificationHead,
