@@ -5725,6 +5725,8 @@ if TYPE_CHECKING:
             T5ModelWithHeads,
             UniPELTConfig,
             AdaMixConfig,
+            ViltAdapterModel,
+            ViltModelWithHeads,
             ViTAdapterModel,
             XLMRobertaAdapterModel,
             XLMRobertaModelWithHeads,
