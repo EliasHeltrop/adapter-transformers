@@ -26,6 +26,7 @@ from torch import nn
 from torch.nn import CrossEntropyLoss
 
 from ...adapters.composition import adjust_tensors_for_parallel
+from ...adapters.lora import Linear as LoRALinear
 from ...adapters.context import ForwardContext
 from ...adapters.mixins.vilt import ViltModelAdaptersMixin, ViltOutputAdaptersMixin, ViltSelfOutputAdaptersMixin
 from ...adapters.model_mixin import ModelWithHeadsAdaptersMixin
@@ -341,9 +342,18 @@ class ViltSelfAttention(nn.Module):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
+        #self.query = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
+        self.query = LoRALinear(
+            config.hidden_size, self.all_head_size, "selfattn", config, attn_key="q", bias=config.qkv_bias
+        )
+        #self.key = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
+        self.key = LoRALinear(
+            config.hidden_size, self.all_head_size, "selfattn", config, attn_key="k", bias=config.qkv_bias
+        )
+        #self.value = nn.Linear(config.hidden_size, self.all_head_size, bias=config.qkv_bias)
+        self.value = LoRALinear(
+            config.hidden_size, self.all_head_size, "selfattn", config, attn_key="v", bias=config.qkv_bias
+        )
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
@@ -452,7 +462,8 @@ class ViltAttention(nn.Module):
 class ViltIntermediate(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+        #self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.dense = LoRALinear(config.hidden_size, config.intermediate_size, "intermediate", config)
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -472,7 +483,8 @@ class ViltOutput(ViltOutputAdaptersMixin, nn.Module):
         super().__init__()
         self.config = config
 
-        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        #self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.dense = LoRALinear(config.intermediate_size, config.hidden_size, "output", config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         self._init_adapter_modules()

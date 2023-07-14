@@ -658,6 +658,7 @@ ADAPTER_CONFIG_MAP = {
     "ia3": IA3Config(),
     "mam": MAMConfig(),
     "unipelt": UniPELTConfig(),
+    "adamix": AdaMixConfig()
 }
 
 DEFAULT_ADAPTER_CONFIG = "pfeiffer"
