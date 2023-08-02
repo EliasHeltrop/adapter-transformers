@@ -296,8 +296,6 @@ class Linear(LoRALayer, nn.Linear):
             merged_A, merged_B = lora.merge_experts()
             delta_w = T(merged_B @ merged_A)
             weight = lora.lora.com(weight, delta_w, scaling=scaling)
-            print("REMOVE ME")
-            print("But experts were merged")
         else:
             # Merge the weights and mark it
             if lora.r > 0:
