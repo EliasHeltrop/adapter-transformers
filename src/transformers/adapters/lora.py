@@ -96,6 +96,7 @@ class AdaMix(nn.Module):
     def __init__(self, lora_A_shape, lora_B_shape, config: AdaMixConfig, gating_heads: int = 1, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config
+        self.r = config.r
         lora_config = self.convert_to_lora_config()
 
         self.use_gating = False  # Needed for lora compatibility
@@ -123,8 +124,10 @@ class AdaMix(nn.Module):
             self.experts_lora_B = torch.nn.ParameterList(
                 [copy.deepcopy(self.lora.lora_B) for _ in range(config.adaption_modules)])
 
-        self.expert_score_weights = torch.nn.Parameter(torch.zeros(config.adaption_modules),
-                                                       requires_grad=False)  # Todo: figure out what this does
+        self.expert_score_weights = torch.nn.Parameter(torch.zeros(config.adaption_modules), requires_grad=False)
+
+        self.merged_A = None
+        self.merged_B = None
 
     def convert_to_lora_config(self) -> LoRAConfig:
         config_dict = self.config.to_dict()
@@ -150,6 +153,16 @@ class AdaMix(nn.Module):
             B = self.experts_lora_B[expert_id]
         return A, B
 
+    def com_inv(self, weights: torch.Tensor, added: torch.Tensor) -> torch.Tensor:
+        """Inverts the composition operation between existing and injected weights."""
+        if self.composition_mode == "add":
+            return weights - added * self.scaling
+        elif self.composition_mode == "scale":
+            return weights / (added * self.scaling)
+        else:
+            raise ValueError("Invalid composition mode.")
+
+
     def merge_experts(self):
         lora_A_w = 0.
         lora_B_w = 0.
@@ -163,6 +176,10 @@ class AdaMix(nn.Module):
         else:
             for idx in range(self.config.adaption_modules):
                 lora_B_w += self.experts_lora_B[idx] * 1 / self.config.adaption_modules
+        lora_A_w = nn.Parameter(lora_A_w)
+        lora_B_w = nn.Parameter(lora_B_w)
+        self.merged_A = lora_A_w
+        self.merged_B = lora_B_w
         return lora_A_w, lora_B_w
 
 
@@ -281,6 +298,9 @@ class Linear(LoRALayer, nn.Linear):
             if lora.r > 0:
                 if lora.composition_mode == "scale":
                     delta_w = T(lora.lora_B)
+                elif isinstance(lora, AdaMix):
+                    delta_w = T(lora.merged_B @ lora.merged_A)
+                    self.weight.data = lora.com_inv(self.weight.data, delta_w)
                 else:
                     delta_w = T(lora.lora_B @ lora.lora_A)
                 self.weight.data = lora.com_inv(self.weight.data, delta_w)

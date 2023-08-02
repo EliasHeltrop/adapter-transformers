@@ -17,7 +17,7 @@ from ...heads import (
     """Vilt Model transformer with the option to add multiple flexible heads on top.""",
     VILT_START_DOCSTRING,
 )
-class ViltAdapterModel(EmbeddingAdaptersWrapperMixin, ModelWithFlexibleHeadsAdaptersMixin, ViltPreTrainedModel):
+class ViltAdapterModel(ModelWithFlexibleHeadsAdaptersMixin, ViltPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
