@@ -98,6 +98,8 @@ class AdaMix(nn.Module):
         self.config = config
         lora_config = self.convert_to_lora_config()
 
+        self.use_gating = False  # Needed for lora compatibility
+
         self.lora = LoRA(
             lora_A_shape, lora_B_shape,
             lora_config,
