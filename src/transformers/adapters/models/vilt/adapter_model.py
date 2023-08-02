@@ -1,5 +1,6 @@
 import warnings
 
+from ...model_mixin import EmbeddingAdaptersWrapperMixin
 from ....file_utils import add_start_docstrings, add_start_docstrings_to_model_forward
 from ....models.vilt.modeling_vilt import VILT_INPUTS_DOCSTRING, VILT_START_DOCSTRING, ViltModel, ViltPreTrainedModel
 from ...context import AdapterSetup
@@ -16,7 +17,7 @@ from ...heads import (
     """Vilt Model transformer with the option to add multiple flexible heads on top.""",
     VILT_START_DOCSTRING,
 )
-class ViltAdapterModel(ModelWithFlexibleHeadsAdaptersMixin, ViltPreTrainedModel):
+class ViltAdapterModel(EmbeddingAdaptersWrapperMixin, ModelWithFlexibleHeadsAdaptersMixin, ViltPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
