@@ -142,7 +142,6 @@ class AdaMix(nn.Module):
             A = self.experts_lora_A[0]
         else:
             expert_id = sample_expert_id()
-            print(f'Expert ID: {expert_id}')
             A = self.experts_lora_A[expert_id]
         if self.config.share_B:
             B = self.experts_lora_B[0]
