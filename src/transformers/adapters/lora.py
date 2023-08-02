@@ -94,7 +94,6 @@ class LoRA(nn.Module):
 
 class AdaMix(nn.Module):
     def __init__(self, lora_A_shape, lora_B_shape, config: AdaMixConfig, gating_heads: int = 1, *args, **kwargs):
-        # TODO: Build one "mixable" Lora Layer. Should make strong use of existing Lora implementation
         super().__init__(*args, **kwargs)
         self.config = config
         lora_config = self.convert_to_lora_config()
@@ -141,6 +140,7 @@ class AdaMix(nn.Module):
             A = self.experts_lora_A[0]
         else:
             expert_id = sample_expert_id()
+            print(f'Expert ID: {expert_id}')
             A = self.experts_lora_A[expert_id]
         if self.config.share_B:
             B = self.experts_lora_B[0]
@@ -148,6 +148,21 @@ class AdaMix(nn.Module):
             expert_id = sample_expert_id()
             B = self.experts_lora_B[expert_id]
         return A, B
+
+    def merge_experts(self):
+        lora_A_w = 0.
+        lora_B_w = 0.
+        if self.config.share_A:
+            lora_A_w = self.experts_lora_A[0]
+        else:
+            for idx in range(self.num_experts):
+                lora_A_w += self.experts_lora_A[idx] * 1 / self.num_experts
+        if self.config.share_B:
+            lora_B_w = self.experts_lora_B[0]
+        else:
+            for idx in range(self.num_experts):
+                lora_B_w += self.experts_lora_B[idx] * 1 / self.num_experts
+        return lora_A_w, lora_B_w
 
 
 class LoRALayer(AdapterLayerBase):
@@ -275,13 +290,21 @@ class Linear(LoRALayer, nn.Linear):
             return torch.t(w) if self.fan_in_fan_out else w
 
         weight = self.weight
-        # Merge the weights and mark it
-        if lora.r > 0:
-            if lora.composition_mode == "scale":
-                delta_w = T(lora.lora_B)
-            else:
-                delta_w = T(lora.lora_B @ lora.lora_A)
+        if isinstance(lora, AdaMix):
+            # Average AdaMix experts
+            merged_A, merged_B = lora.merge_experts()
+            delta_w = T(merged_B @ merged_A)
             weight = lora.com(weight, delta_w, scaling=scaling)
+            print("REMOVE ME")
+            print("But experts were merged")
+        else:
+            # Merge the weights and mark it
+            if lora.r > 0:
+                if lora.composition_mode == "scale":
+                    delta_w = T(lora.lora_B)
+                else:
+                    delta_w = T(lora.lora_B @ lora.lora_A)
+                weight = lora.com(weight, delta_w, scaling=scaling)
 
         return weight
 
