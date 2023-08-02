@@ -156,12 +156,12 @@ class AdaMix(nn.Module):
         if self.config.share_A:
             lora_A_w = self.experts_lora_A[0]
         else:
-            for idx in range(self.num_experts):
+            for idx in range(self.config.adaption_modules):
                 lora_A_w += self.experts_lora_A[idx] * 1 / self.num_experts
         if self.config.share_B:
             lora_B_w = self.experts_lora_B[0]
         else:
-            for idx in range(self.num_experts):
+            for idx in range(self.config.adaption_modules):
                 lora_B_w += self.experts_lora_B[idx] * 1 / self.num_experts
         return lora_A_w, lora_B_w
 
