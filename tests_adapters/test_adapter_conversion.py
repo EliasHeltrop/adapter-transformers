@@ -48,8 +48,8 @@ class ModelClassConversionTestMixin:
         )
         # We don't need to convert some of the weights, so remove them for the check
         unexpected_keys = loading_info["unexpected_keys"]
-        if static_model._keys_to_ignore_on_load_missing is not None:
-            for pat in static_model._keys_to_ignore_on_load_missing:
+        if static_model._tied_weights_keys is not None:
+            for pat in static_model._tied_weights_keys:
                 unexpected_keys = [k for k in unexpected_keys if re.search(pat, k) is None]
         # HACK for bert-based models
         if isinstance(static_model, BertPreTrainedModel):

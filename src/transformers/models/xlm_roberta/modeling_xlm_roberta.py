@@ -648,7 +648,7 @@ class XLMRobertaPreTrainedModel(PreTrainedModel):
             # must make a new list, or the class variable gets modified!
             self._keys_to_ignore_on_save = [k for k in self._keys_to_ignore_on_save if k not in del_keys_to_ignore]
             self._keys_to_ignore_on_load_missing = [
-                k for k in self._keys_to_ignore_on_load_missing if k not in del_keys_to_ignore
+                k for k in self._tied_weights_keys if k not in del_keys_to_ignore
             ]
 
 

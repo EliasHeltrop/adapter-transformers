@@ -1512,8 +1512,8 @@ class ModelTesterMixin:
                 extra_params = {k: v for k, v in model.named_parameters() if not k.startswith(base_model_prefix)}
                 extra_params.update({k: v for k, v in model.named_buffers() if not k.startswith(base_model_prefix)})
                 # Some models define this as None
-                if model._keys_to_ignore_on_load_missing:
-                    for key in model._keys_to_ignore_on_load_missing:
+                if model._tied_weights_keys:
+                    for key in model._tied_weights_keys:
                         extra_params.pop(key, None)
 
                 if not extra_params:

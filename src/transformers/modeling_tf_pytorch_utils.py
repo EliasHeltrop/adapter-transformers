@@ -271,9 +271,9 @@ def load_pytorch_state_dict_in_tf2_model(
             if allow_missing_keys:
                 missing_keys.append(name)
                 continue
-            elif tf_model._keys_to_ignore_on_load_missing is not None:
+            elif tf_model._tied_weights_keys is not None:
                 # authorized missing keys don't have to be loaded
-                if any(re.search(pat, name) is not None for pat in tf_model._keys_to_ignore_on_load_missing):
+                if any(re.search(pat, name) is not None for pat in tf_model._tied_weights_keys):
                     continue
             raise AttributeError(f"{name} not found in PyTorch model")
 
@@ -293,8 +293,8 @@ def load_pytorch_state_dict_in_tf2_model(
 
     unexpected_keys = list(all_pytorch_weights)
 
-    if tf_model._keys_to_ignore_on_load_missing is not None:
-        for pat in tf_model._keys_to_ignore_on_load_missing:
+    if tf_model._tied_weights_keys is not None:
+        for pat in tf_model._tied_weights_keys:
             missing_keys = [k for k in missing_keys if re.search(pat, k) is None]
     if tf_model._keys_to_ignore_on_load_unexpected is not None:
         for pat in tf_model._keys_to_ignore_on_load_unexpected:
@@ -463,8 +463,8 @@ def load_tf2_state_dict_in_pytorch_model(pt_model, tf_state_dict, allow_missing_
 
     # Some models may have keys that are not in the state by design, removing them before needlessly warning
     # the user.
-    if pt_model._keys_to_ignore_on_load_missing is not None:
-        for pat in pt_model._keys_to_ignore_on_load_missing:
+    if pt_model._tied_weights_keys is not None:
+        for pat in pt_model._tied_weights_keys:
             missing_keys = [k for k in missing_keys if re.search(pat, k) is None]
 
     if pt_model._keys_to_ignore_on_load_unexpected is not None:

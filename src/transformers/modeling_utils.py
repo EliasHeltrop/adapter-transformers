@@ -995,7 +995,7 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
 
     # a list of `re` patterns of `state_dict` keys that should be removed from the list of missing
     # keys we find (keys inside the model but not in the checkpoint) and avoid unnecessary warnings.
-    _keys_to_ignore_on_load_missing = None
+    _tied_weights_keys = None
     # a list of `re` patterns of `state_dict` keys that should be removed from the list of
     # unexpected keys we find (keys inside the checkpoint but not the model) and avoid unnecessary
     # warnings.
@@ -2619,8 +2619,8 @@ class PreTrainedModel(nn.Module, ModuleUtilsMixin, GenerationMixin, PushToHubMix
 
         # Some models may have keys that are not in the state by design, removing them before needlessly warning
         # the user.
-        if cls._keys_to_ignore_on_load_missing is not None:
-            for pat in cls._keys_to_ignore_on_load_missing:
+        if cls._tied_weights_keys is not None:
+            for pat in cls._tied_weights_keys:
                 missing_keys = [k for k in missing_keys if re.search(pat, k) is None]
 
         if cls._keys_to_ignore_on_load_unexpected is not None:

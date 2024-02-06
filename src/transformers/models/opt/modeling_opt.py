@@ -804,7 +804,7 @@ class OPTModel(OPTPreTrainedModel):
 
 
 class OPTForCausalLM(OPTPreTrainedModel):
-    _keys_to_ignore_on_load_missing = [r"lm_head.weight"]
+    _tied_weights_keys = [r"lm_head.weight"]
 
     def __init__(self, config):
         super().__init__(config)
